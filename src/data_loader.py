@@ -112,13 +112,6 @@ class SwapRateDataset(Dataset):
 
     def __init__(self, dfs, currencies=CURRENCIES,
                  train=True, split_date='2024-01-01'):
-        """
-        Args:
-            dfs:        load_all_currencies() 的输出
-            currencies: 使用的货币列表
-            train:      True=训练集, False=测试集
-            split_date: 训练/测试分割日期
-        """
         self.currencies = currencies
         self.split_date = pd.Timestamp(split_date)
         self.train = train
@@ -182,7 +175,7 @@ class SwapRateDataset(Dataset):
 
         rates_norm = self.data[idx]
         rates = rates_norm * (S_MAX - S_MIN) + S_MIN
-        return rates * 100.0  # 转回 %
+        return rates * 100.0  
 
 
 def get_dataloaders(dfs, currencies=CURRENCIES,
