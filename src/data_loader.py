@@ -6,11 +6,11 @@ from torch.utils.data import Dataset, DataLoader
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-S_MIN, S_MAX = 0.02, 0.06
+S_MIN, S_MAX = -0.02, 0.08
 MATURITIES = [2, 3, 5, 10, 15, 20, 30]
 TARGET_TENORS = ['2Y', '3Y', '5Y', '10Y', '15Y', '20Y', '30Y']
 
-FILE_PATH = "Bloomberg - Historical Data v2026-01-21.xlsx"
+FILE_PATH = "Bloomberg - Historical Data v2026-04-16.xlsx"
 
 CURRENCIES = ['GBP', 'EUR', 'USD']
 
@@ -43,44 +43,13 @@ def find_ticker_col(raw_df, ticker):
 
 
 def get_data(sheet_name, start_date="2023-01-30"):
-    """
 
-    return DataFrame column: [Date, 2Y, 3Y, 5Y, 10Y, 15Y, 20Y, 30Y]
-    """
-    raw = pd.read_excel(FILE_PATH, sheet_name=sheet_name, header=None)
-
-    ticker_col_map = {}
-    for ticker, tenor in zip(TABLE_MAPPING[sheet_name], TARGET_TENORS):
-        col_idx = find_ticker_col(raw, ticker)
-        if col_idx is None:
-            print(f"Warning: ticker {ticker} not found in {sheet_name}")
-            continue
-        ticker_col_map[tenor] = {
-            "ticker":   ticker,
-            "date_col": col_idx - 1,
-            "rate_col": col_idx
-        }
-
-    result_df = None
-    for tenor, info in ticker_col_map.items():
-        date_series = raw.iloc[1:, info["date_col"]]
-        rate_series = raw.iloc[1:, info["rate_col"]]
-
-        temp_df = pd.DataFrame({
-            "Date": pd.to_datetime(
-                date_series.values, errors="coerce", format="mixed"
-            ),
-            tenor: pd.to_numeric(rate_series.values, errors="coerce")
-        }).dropna(subset=["Date"])
-
-        result_df = temp_df if result_df is None else \
-            pd.merge(result_df, temp_df, on="Date", how="outer")
-
-    result_df = result_df.sort_values("Date")
+    TARGET_TENORS = ['Date', '2Y', '3Y', '5Y', '10Y', '15Y', '20Y', '30Y']
+    result_df = pd.read_excel(FILE_PATH, sheet_name=sheet_name)
+    result_df.columns = TARGET_TENORS
     result_df = result_df.dropna(subset=TARGET_TENORS)
-    result_df = result_df[
-        result_df["Date"] >= pd.Timestamp(start_date)
-    ]
+    result_df['Date'] = pd.to_datetime(result_df['Date'])
+    result_df = result_df[result_df['Date'] >= start_date]
     result_df = result_df.reset_index(drop=True)
     return result_df
 
@@ -104,25 +73,15 @@ def load_all_currencies(start_date="2023-01-30"):
 class SwapRateDataset(Dataset):
     """
     PyTorch Dataset for multi-currency swap rates
-
-    每个样本：
-        x:     (7,)  归一化的互换利率 [0,1]
-        label: int   货币索引 (0=GBP, 1=EUR, 2=USD)
     """
 
     def __init__(self, dfs, currencies=CURRENCIES,
                  train=True, split_date='2024-01-01'):
-        """
-        Args:
-            dfs:        load_all_currencies() 的输出
-            currencies: 使用的货币列表
-            train:      True=训练集, False=测试集
-            split_date: 训练/测试分割日期
-        """
+
         self.currencies = currencies
         self.split_date = pd.Timestamp(split_date)
         self.train = train
-
+        self.all_currencies = CURRENCIES
         self.data, self.labels, self.dates = \
             self._prepare(dfs)
 
@@ -131,9 +90,9 @@ class SwapRateDataset(Dataset):
         all_labels = []
         all_dates = []
 
-        for ccy_idx, ccy in enumerate(self.currencies):
+        for ccy in self.currencies:
             df = dfs[ccy].copy()
-
+            ccy_idx = self.all_currencies.index(ccy)
             if self.train:
                 df = df[df['Date'] <= self.split_date]
             else:
@@ -182,7 +141,7 @@ class SwapRateDataset(Dataset):
 
         rates_norm = self.data[idx]
         rates = rates_norm * (S_MAX - S_MIN) + S_MIN
-        return rates * 100.0  # 转回 %
+        return rates * 100.0
 
 
 def get_dataloaders(dfs, currencies=CURRENCIES,
@@ -207,6 +166,6 @@ def get_dataloaders(dfs, currencies=CURRENCIES,
     )
 
     print(f"\nTotal train samples: {len(train_dataset)}")
-    print(f"Total test  samples: {len(test_dataset)}")
+    print(f"Total test samples: {len(test_dataset)}")
 
     return train_loader, test_loader, train_dataset, test_dataset

@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import numpy as np
 from src.model import vae_loss
-S_MIN, S_MAX = 0.02, 0.06
+S_MIN, S_MAX = -0.02, 0.08
 
 
 def train_vae(model, train_loader, test_loader,
@@ -91,7 +91,79 @@ def train_vae(model, train_loader, test_loader,
     return history
 
 
-def compute_rmse(model, dataset, device='cpu'):
+def train_cvae(model, train_loader, test_loader,
+               n_epochs=500, lr=1e-3, beta=1e-7,
+               device='cpu', verbose=True):
+
+    model = model.to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    history = {
+        'train_total': [], 'train_recon': [], 'train_kld': [],
+        'test_total':  [], 'test_recon':  [], 'test_kld':  []
+    }
+
+    for epoch in range(n_epochs):
+
+        # ── train ──────────────────────────────────
+        model.train()
+        train_losses = {'total': [], 'recon': [], 'kld': []}
+
+        for x_batch, labels in train_loader:
+            x_batch = x_batch.to(device)
+            labels = labels.to(device)
+
+            optimizer.zero_grad()
+
+            # CVAE forward
+            x_recon, mu, logvar = model(x_batch, labels)
+            total, recon, kld = vae_loss(
+                x_batch, x_recon, mu, logvar, beta=beta
+            )
+            total.backward()
+            optimizer.step()
+
+            train_losses['total'].append(total.item())
+            train_losses['recon'].append(recon.item())
+            train_losses['kld'].append(kld.item())
+
+        # ── test ──────────────────────────────────
+        model.eval()
+        test_losses = {'total': [], 'recon': [], 'kld': []}
+
+        with torch.no_grad():
+            for x_batch, labels in test_loader:
+                x_batch = x_batch.to(device)
+                labels = labels.to(device)
+
+                x_recon, mu, logvar = model(x_batch, labels)
+                total, recon, kld = vae_loss(
+                    x_batch, x_recon, mu, logvar, beta=beta
+                )
+                test_losses['total'].append(total.item())
+                test_losses['recon'].append(recon.item())
+                test_losses['kld'].append(kld.item())
+
+        for key in ['total', 'recon', 'kld']:
+            history[f'train_{key}'].append(
+                np.mean(train_losses[key])
+            )
+            history[f'test_{key}'].append(
+                np.mean(test_losses[key])
+            )
+
+        if verbose and (epoch + 1) % 100 == 0:
+            print(
+                f"Epoch [{epoch+1:4d}/{n_epochs}] "
+                f"Train: {history['train_total'][-1]:.6f} "
+                f"(R:{history['train_recon'][-1]:.4f} "
+                f"K:{history['train_kld'][-1]:.6f}) | "
+                f"Test: {history['test_total'][-1]:.6f}"
+            )
+
+    return history
+
+
+def compute_rmse_vae(model, dataset, device='cpu'):
     """
      RMSE(bp)
 
@@ -120,6 +192,31 @@ def compute_rmse(model, dataset, device='cpu'):
             rmse = np.sqrt(np.mean((x_rec - x_orig) ** 2))
             rmse_bp = rmse * 10000  # bp
 
+            all_rmse.append(rmse_bp)
+
+    return np.array(all_rmse)
+
+
+def compute_rmse_cvae(model, dataset, device='cpu'):
+
+    model.eval()
+    all_rmse = []
+
+    with torch.no_grad():
+        for i in range(len(dataset)):
+            x, label = dataset[i]
+            x = x.unsqueeze(0).to(device)
+            label = label.unsqueeze(0).to(device)
+
+            # CVAE
+            mu, _ = model.encode(x, label)
+            x_recon = model.decode(mu, label)
+
+            x_orig = x.cpu().numpy()[0] * (S_MAX - S_MIN) + S_MIN
+            x_rec = x_recon.cpu().numpy()[0] * (S_MAX - S_MIN) + S_MIN
+
+            rmse = np.sqrt(np.mean((x_rec - x_orig) ** 2))
+            rmse_bp = rmse * 10000
             all_rmse.append(rmse_bp)
 
     return np.array(all_rmse)
