@@ -1,3 +1,5 @@
+"""Data loading and dataset utilities for multi-currency swap-rate curves."""
+
 import pandas as pd
 import numpy as np
 import warnings
@@ -35,6 +37,7 @@ for sheet, (prefix, suffix) in TICKER_MAPPING.items():
 
 
 def find_ticker_col(raw_df, ticker):
+    """Locate the column index containing a ticker string in row 0."""
     for col in range(raw_df.shape[1]):
         cell = str(raw_df.iloc[0, col]).strip()
         if ticker.lower() in cell.lower():
@@ -43,6 +46,7 @@ def find_ticker_col(raw_df, ticker):
 
 
 def get_data(sheet_name, start_date="2023-01-30"):
+    """Load one currency sheet, align tenor columns, and filter by date."""
 
     TARGET_TENORS = ['Date', '2Y', '3Y', '5Y', '10Y', '15Y', '20Y', '30Y']
     result_df = pd.read_excel(FILE_PATH, sheet_name=sheet_name)
@@ -56,7 +60,7 @@ def get_data(sheet_name, start_date="2023-01-30"):
 
 def load_all_currencies(start_date="2023-01-30"):
     """
-    return {'GBP': df_gbp, 'EUR': df_eur, 'USD': df_usd}
+    Return a dict with one cleaned DataFrame per configured currency.
     """
     dfs = {}
     for ccy in CURRENCIES:
@@ -72,11 +76,12 @@ def load_all_currencies(start_date="2023-01-30"):
 # ── Dataset ──────────────
 class SwapRateDataset(Dataset):
     """
-    PyTorch Dataset for multi-currency swap rates
+    PyTorch dataset of normalized swap rates with currency labels.
     """
 
     def __init__(self, dfs, currencies=CURRENCIES,
                  train=True, split_date='2024-01-01'):
+        """Build train/test split and cache normalized arrays in memory."""
         self.currencies = currencies
         self.split_date = pd.Timestamp(split_date)
         self.train = train
@@ -85,6 +90,7 @@ class SwapRateDataset(Dataset):
             self._prepare(dfs)
 
     def _prepare(self, dfs):
+        """Stack selected currencies and create labels for model conditioning."""
         all_rates = []
         all_labels = []
         all_dates = []
@@ -106,7 +112,7 @@ class SwapRateDataset(Dataset):
 
             rates = rates_pct / 100.0
 
-            #  [-5%, 25%] -> [0, 1]
+            # Normalize rates into [0, 1] range expected by Sigmoid decoder.
             rates_norm = (rates - S_MIN) / (S_MAX - S_MIN)
             rates_norm = np.clip(rates_norm, 0.0, 1.0)
 
@@ -128,15 +134,18 @@ class SwapRateDataset(Dataset):
         return data, labels, all_dates
 
     def __len__(self):
+        """Number of observations in this split."""
         return len(self.data)
 
     def __getitem__(self, idx):
+        """Return one normalized curve and its integer currency label."""
         return (
             torch.tensor(self.data[idx],   dtype=torch.float32),
             torch.tensor(self.labels[idx], dtype=torch.long)
         )
 
     def get_rates_original(self, idx):
+        """Inverse-transform one normalized sample back to percentage rates."""
 
         rates_norm = self.data[idx]
         rates = rates_norm * (S_MAX - S_MIN) + S_MIN
@@ -148,6 +157,7 @@ class SwapRateDataset(Dataset):
 
 def get_dataloaders(dfs, currencies=CURRENCIES,
                     batch_size=64, split_date='2024-01-01'):
+    """Create train/test datasets and DataLoaders with a date split."""
     print("\nPreparing training set:")
     train_dataset = SwapRateDataset(
         dfs, currencies, train=True,  split_date=split_date

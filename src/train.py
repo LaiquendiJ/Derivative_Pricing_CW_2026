@@ -1,3 +1,5 @@
+"""Training loops and RMSE evaluation utilities for VAE/CVAE models."""
+
 import torch
 import torch.optim as optim
 import numpy as np
@@ -10,6 +12,8 @@ def train_vae(model, train_loader, test_loader,
               device='cpu', verbose=True):
     """
 
+    Train the unconditional VAE and track train/test losses per epoch.
+
     Args:
         model:        MultiCurrencyVAE
         train_loader:  DataLoader
@@ -21,7 +25,7 @@ def train_vae(model, train_loader, test_loader,
         verbose
 
     Returns:
-        history: loss curve
+        history: epoch-wise loss curves for total/reconstruction/KLD.
     """
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -38,7 +42,7 @@ def train_vae(model, train_loader, test_loader,
         train_losses = {'total': [], 'recon': [], 'kld': []}
 
         for x_batch, _ in train_loader:
-            # _ is the ticker
+            # Label is unused in vanilla VAE training.
             x_batch = x_batch.to(device)
 
             optimizer.zero_grad()
@@ -94,6 +98,7 @@ def train_vae(model, train_loader, test_loader,
 def train_cvae(model, train_loader, test_loader,
                n_epochs=500, lr=1e-3, beta=1e-7,
                device='cpu', verbose=True):
+    """Train the conditional VAE with currency labels as conditioning input."""
 
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -165,14 +170,14 @@ def train_cvae(model, train_loader, test_loader,
 
 def compute_rmse_vae(model, dataset, device='cpu'):
     """
-     RMSE(bp)
+    Compute per-sample RMSE in basis points for VAE reconstructions.
 
     Args:
         model
         dataset: SwapRateDataset
 
     Returns:
-        rmse_bp: (N,) (bp)
+        rmse_bp: array of sample-wise RMSE values in basis points.
     """
     model.eval()
     all_rmse = []
@@ -188,7 +193,7 @@ def compute_rmse_vae(model, dataset, device='cpu'):
             x_orig = x.cpu().numpy()[0] * (S_MAX - S_MIN) + S_MIN
             x_rec = x_recon.cpu().numpy()[0] * (S_MAX - S_MIN) + S_MIN
 
-            # RMSE（bp = 0.01%）
+            # Convert to basis points where 1 bp = 0.01%.
             rmse = np.sqrt(np.mean((x_rec - x_orig) ** 2))
             rmse_bp = rmse * 10000  # bp
 
@@ -198,6 +203,7 @@ def compute_rmse_vae(model, dataset, device='cpu'):
 
 
 def compute_rmse_cvae(model, dataset, device='cpu'):
+    """Compute per-sample RMSE in basis points for CVAE reconstructions."""
 
     model.eval()
     all_rmse = []

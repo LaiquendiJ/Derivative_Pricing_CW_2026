@@ -1,3 +1,5 @@
+"""Neural network model definitions and objective for VAE/CVAE training."""
+
 import torch
 import torch.nn as nn
 
@@ -13,6 +15,7 @@ class MultiCurrencyVAE(nn.Module):
     """
 
     def __init__(self, input_dim=7, latent_dim=2):
+        """Initialize unconditional VAE encoder/decoder architecture."""
         super(MultiCurrencyVAE, self).__init__()
 
         self.input_dim = input_dim   # N = 7
@@ -113,6 +116,7 @@ class MultiCurrencyCVAE(nn.Module):
 
     def __init__(self, input_dim=7, latent_dim=2,
                  n_currencies=3):
+        """Initialize conditional VAE using one-hot currency conditioning."""
         super().__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
@@ -207,7 +211,7 @@ class MultiCurrencyCVAE(nn.Module):
 
 def vae_loss(x, x_recon, mu, logvar, beta=1e-7, N=7):
     """
-    VAE loss
+    Compute reconstruction + KL divergence objective.
 
     D_VAE = (1/N) * D_L2 + β * D_KLD
 

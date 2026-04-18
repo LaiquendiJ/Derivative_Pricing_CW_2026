@@ -1,3 +1,5 @@
+"""Entry point for training/evaluating VAE and CVAE models on swap-rate curves."""
+
 import torch
 import numpy as np
 
@@ -28,20 +30,21 @@ CONFIG = {
     'device':      'cuda' if torch.cuda.is_available() else 'cpu',
     'seed':        42,
 }
-'''
-'split_date':  '2024-01-01',
-    'start_date':  '2015-01-01',
-    'batch_size':  64,
-    'n_epochs':    1000,
-    'lr':          1e-3,
-    'beta':        1e-7,
-VAE              5.65bp      14.46bp
-CVAE             2.85bp       7.06bp
-'''
+
+# Notes from an earlier experiment setup/results kept for reference:
+# - split_date: 2024-01-01
+# - start_date: 2015-01-01
+# - batch_size: 64
+# - n_epochs: 1000
+# - lr: 1e-3
+# - beta: 1e-7
+# - VAE mean RMSE: 5.65bp (in), 14.46bp (out)
+# - CVAE mean RMSE: 2.85bp (in), 7.06bp (out)
 
 
 def run_vae(dfs, train_loader, test_loader,
             train_dataset, test_dataset):
+    """Train the unconditional VAE and report/save reconstruction metrics."""
     print("\n" + "="*50)
     print("Training Multi-Currency VAE")
     print("="*50)
@@ -76,7 +79,7 @@ def run_vae(dfs, train_loader, test_loader,
 
 def run_cvae(dfs, train_loader, test_loader,
              train_dataset, test_dataset):
-    """CVAE"""
+    """Train the conditional VAE and report/save reconstruction metrics."""
     print("\n" + "="*50)
     print("Training Multi-Currency CVAE")
     print("="*50)
@@ -115,6 +118,7 @@ def run_cvae(dfs, train_loader, test_loader,
 
 
 def main():
+    """Run end-to-end data loading, training, evaluation, and plotting."""
     torch.manual_seed(CONFIG['seed'])
     np.random.seed(CONFIG['seed'])
 
@@ -165,7 +169,7 @@ def main():
     plot_training_history(vae_history,  title='VAE')
     plot_training_history(cvae_history, title='CVAE')
 
-    # RMSE（VAE vs CVAE）
+    # RMSE comparison plots for in/out sample and VAE vs CVAE.
     plot_rmse_distribution(
         {
             'VAE in-sample':    vae_train_rmse,

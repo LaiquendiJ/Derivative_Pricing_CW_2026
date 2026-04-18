@@ -1,3 +1,5 @@
+"""Plotting helpers for model diagnostics and latent-space interpretation."""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -12,7 +14,7 @@ currency_color = {'USD': 'green', 'GBP': 'orange', 'EUR': 'blue'}
 
 def plot_training_history(history, title):
     """
-    loss function
+    Plot train/test curves for total, reconstruction, and KL losses.
     """
     _, axes = plt.subplots(1, 3, figsize=(15, 4))
 
@@ -36,7 +38,7 @@ def plot_training_history(history, title):
 
 def plot_rmse_distribution(rmse_dict, title='RMSE Distribution'):
     """
-    Figure 9, 10, 11
+    Plot histogram-based RMSE density comparison across methods/splits.
 
     Args:
         rmse_dict: {'Method Name': rmse_array,...}
@@ -63,6 +65,7 @@ def plot_rmse_distribution(rmse_dict, title='RMSE Distribution'):
 
 
 def plot_rmse_by_currency(per_ccy_rmse):
+    """Compare in-sample RMSE distributions across currencies."""
     for ccy, rmse in per_ccy_rmse.items():
         plt.hist(
             rmse,
@@ -83,7 +86,7 @@ def plot_rmse_by_currency(per_ccy_rmse):
 
 def plot_world_map(model, datasets, currencies, device='cpu'):
     """
-    Figure 13
+    Visualize latent points and covariance ellipses per currency.
     """
     model.eval()
 
@@ -169,6 +172,7 @@ def plot_world_map(model, datasets, currencies, device='cpu'):
 
 def _draw_ellipse(ax, mean, cov, color, label, n_std=1.5):
     """
+    Draw a covariance ellipse centered at mean for 2D latent points.
     """
     eigenvalues, eigenvectors = np.linalg.eigh(cov)
     order = eigenvalues.argsort()[::-1]
@@ -195,6 +199,7 @@ def plot_reconstruction_vae_cvae(
         vae_model, cvae_model,
         datasets, currencies,
         n_samples=300, device='cpu'):
+    """Overlay historical and reconstructed curves for VAE vs CVAE."""
 
     n_rows = len(datasets)
     fig, axes = plt.subplots(n_rows, 3, figsize=(18, 5 * n_rows))
@@ -263,6 +268,7 @@ def plot_reconstruction_vae_cvae(
 def plot_ellipse_decoding_multi(model, datasets, currencies,
                                 all_z_background,
                                 n_points=60, device='cpu'):
+    """Decode points sampled along latent ellipses into yield curves."""
 
     model.eval()
     n_rows = len(datasets)
